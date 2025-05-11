@@ -1,0 +1,39 @@
+#!/usr/bin/bash
+set -e
+
+if [[ $1 = --gamescope ]]
+then
+    shift
+    GAMESCOPE=1
+fi
+
+if [[ -f /opt/umu/$1/exe ]]
+then
+    exe=/opt/umu/$1/exe
+else
+    exe=$1
+fi
+shift
+
+install -D /etc/MangoHud.conf ~/.config/MangoHud/MangoHud.conf
+if [[ -n $MANGOHUD_GPU ]]
+then
+    export MANGOHUD_CONFIG=read_cfg,pci_dev=${MANGOHUD_GPU//:/\\:}
+fi
+
+export GAMEID=.
+
+if [[ -n $GAMESCOPE ]]
+then
+    if [[ -z GAMESCOPE_WIDTH ]] || [[ -z GAMESCOPE_HEIGHT ]] || [[ -z GAMESCOPE_REFRESH ]]
+    then
+        echo "must set:" GAMESCOPE_{WIDTH,HEIGHT,REFRESH}
+        exit 1
+    fi
+
+    exec gamescope -f -w $GAMESCOPE_WIDTH -h $GAMESCOPE_HEIGHT -r $GAMESCOPE_REFRESH --mangoapp -- umu-run "$exe" "$@"
+else
+    export PROTON_ENABLE_WAYLAND=1 PROTON_ENABLE_HDR=1
+    exec mangohud umu-run "$exe" "$@"
+fi
+
