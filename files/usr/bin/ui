@@ -1,0 +1,69 @@
+#!/usr/bin/bash
+set -e
+
+if [[ $# -eq 0 ]]
+then
+    exit
+fi
+
+
+### environment ###
+name=$1
+shift
+
+export WINEPREFIX=/opt/umu/.install-prefix
+
+
+### install ###
+mkdir -p   /opt/umu/"$name" "$WINEPREFIX"/dosdevices
+ln    -sfT /opt/umu/"$name" "$WINEPREFIX"/dosdevices/d:
+
+if [[ $# -gt 0 ]]
+then
+    ur "$@"
+fi
+
+
+### file creation ###
+cd /opt/umu/"$name"
+
+sel() {
+    readarray -t lines <$1
+
+    if [[ ${#lines[@]} -eq 1 ]]
+    then
+        echo "${lines[0]}"
+    else
+        select line in "${lines[@]}"
+        do
+            echo "$line"
+            break
+        done
+    fi
+}
+
+if ! [[ -e exe ]]
+then
+    lnk=$(sel <(find $WINEPREFIX/drive_c/users/*/Desktop -type f))
+    exe=$(sel <(strings "$lnk" | grep -o "D:.*exe"))
+
+    if [[ -n $exe ]]
+    then
+        exe=$(ur winepath -u "$exe")
+    else
+        read -p "exe: " exe
+    fi
+
+    ln -sr "$exe" exe
+fi
+
+if ! [[ -f icon.png ]]
+then
+    icoextract exe icon.ico
+
+    mkdir -p icons
+    magick icon.ico icons/icon.png
+
+    mv "$(du -b icons/* | sort -nr | head -1 | cut -f2)" icon.png
+    rm -rf icon.ico icons
+fi

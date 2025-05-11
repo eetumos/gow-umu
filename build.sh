@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e
+
+find $(dirname $0)/files -exec touch -d2025-01-01 {} +
+
+podman build --security-opt=label=disable                                  -t ghcr.io/eetumos/gow-umu:UMU-Proton "$@" .
+podman build --security-opt=label=disable --build-arg=PROTONPATH=GE-Proton -t ghcr.io/eetumos/gow-umu:GE-Proton  "$@" .
+
+version() {
+    podman run --rm ghcr.io/eetumos/gow-umu:$1 sh -c 'cd /umu/Steam/compatibilitytools.d; basename $(readlink $PROTONPATH)'
+}
+
+podman tag ghcr.io/eetumos/gow-umu:{UMU-Proton,latest}
+podman tag ghcr.io/eetumos/gow-umu:{UMU-Proton,$(version UMU-Proton)}
+podman tag ghcr.io/eetumos/gow-umu:{GE-Proton,$(version GE-Proton)}

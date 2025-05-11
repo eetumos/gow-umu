@@ -1,0 +1,11 @@
+#!/usr/bin/bash
+set -e
+
+export HOME=/home/retro
+export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/1000}
+export WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-0}
+
+mkdir -p                         /opt/umu "$XDG_RUNTIME_DIR"
+chown -R retro:retro /home/retro /opt/umu "$XDG_RUNTIME_DIR"
+
+exec setpriv --reuid=retro --regid=retro --keep-groups -- "$@"
