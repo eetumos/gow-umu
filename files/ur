@@ -1,0 +1,18 @@
+#!/usr/bin/bash
+set -e
+
+if [[ -f /opt/umu/$1/exe ]]
+then
+    exe=/opt/umu/$1/exe
+else
+    exe=$1
+fi
+shift
+
+if [[ -n $gpu ]]
+then
+    export MANGOHUD_CONFIG=read_cfg,pci_dev=${gpu//:/\\:}
+fi
+
+export GAMEID=.
+exec gamescope --mangoapp -f -w $GAMESCOPE_WIDTH -h $GAMESCOPE_HEIGHT -r $GAMESCOPE_REFRESH -- umu-run "$exe" "$@"
