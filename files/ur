@@ -14,5 +14,5 @@ then
     export MANGOHUD_CONFIG=read_cfg,pci_dev=${gpu//:/\\:}
 fi
 
-export GAMEID=. GAMESCOPE_WSI_HIDE_PRESENT_WAIT_EXT=1
-exec gamescope --mangoapp -f -w $GAMESCOPE_WIDTH -h $GAMESCOPE_HEIGHT -r $GAMESCOPE_REFRESH -- umu-run "$exe" "$@"
+export GAMEID=. PROTON_ENABLE_WAYLAND=1 PROTON_ENABLE_HDR=1
+exec mangohud umu-run "$exe" "$@"
