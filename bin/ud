@@ -1,0 +1,95 @@
+#!/usr/bin/bash
+set -e
+shopt -s nullglob
+
+
+### environment ###
+GOW_UMU_DATA=${GOW_UMU_DATA:-/opt/umu}
+GOW_UMU_APPLICATIONS=${GOW_UMU_APPLICATIONS:-/usr/local/share/applications/umu}
+
+if ! command -v up >/dev/null
+then
+    GOW_UMU_BIN=${GOW_UMU_BIN:-$(realpath "$(dirname "$0")")}
+fi
+
+if [[ $1 = --force ]]
+then
+    shift
+    GOW_UMU_FORCE=1
+fi
+
+
+### intent ###
+installed=( $GOW_UMU_DATA/* )
+installed=( "${installed[@]#$GOW_UMU_DATA/}" )
+
+if [[ $# -eq 0 ]]
+then
+    requested=( "${installed[@]}" )
+else
+    requested=( "$@" )
+fi
+
+uninstalled=()
+for file in "$GOW_UMU_APPLICATIONS"/*.desktop
+do
+    for name in "${installed[@]}"
+    do
+        if [[ $GOW_UMU_APPLICATIONS/$name.desktop = $file ]]
+        then
+            continue 2
+        fi
+    done
+
+    echo "removing redundant entry: '$file'" >&2
+    uninstalled+=( "$file" )
+done
+
+
+### output ###
+tmp=$(mktemp -d)
+
+for name in "${requested[@]}"
+do
+    if ! [[ -d $GOW_UMU_DATA/$name ]]
+    then
+        echo "request doesn't exist: '$GOW_UMU_DATA/$name'" >&2
+        rm -r $tmp
+        exit 1
+    fi
+
+    if [[ -f $GOW_UMU_APPLICATIONS/$name.desktop ]] && [[ -z $GOW_UMU_FORCE ]]
+    then
+        echo "skipping existing entry: '$GOW_UMU_APPLICATIONS/$name.desktop'" >&2
+        continue
+    fi
+
+    cat <<-EOF >$tmp/"$name".desktop
+		[Desktop Entry]
+		Type=Application
+		Name=$name
+		Categories=Game
+		Exec=$GOW_UMU_BIN${GOW_UMU_BIN:+/}up ur "$name"
+		Icon=$GOW_UMU_DATA/$name/icon.png
+	EOF
+
+    echo "generating new entry: '$GOW_UMU_APPLICATIONS/$name.desktop'" >&2
+done
+
+if [[ -w $GOW_UMU_APPLICATIONS ]]
+then
+    elevate=
+else
+    elevate=pkexec
+fi
+
+if [[ ${#requested[@]} -gt 0 ]] || [[ ${#uninstalled[@]} -gt 0 ]]
+then
+    $elevate bash -c "mkdir -p ${GOW_UMU_APPLICATIONS@Q}
+                      cd       ${GOW_UMU_APPLICATIONS@Q}
+    
+                      [[ ${#requested[@]}   -gt 0 ]] && cp ${tmp@Q}/* .
+                      [[ ${#uninstalled[@]} -gt 0 ]] && rm ${uninstalled[@]@Q}"
+fi
+
+rm -r $tmp

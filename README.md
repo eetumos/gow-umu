@@ -1,67 +1,25 @@
 gow-umu
 =======
-Proton for [Wolf](https://github.com/games-on-whales/wolf)
+Proton in a container, compatible with [Wolf](https://github.com/games-on-whales/wolf)
 
-Example config
---------------
+Scripts
+-------
+- host
+    - `up`: use container on host desktop environment
+    - `ud`: create desktop entries
+    - `uw`: create Wolf config snippet
+    - configuration: `GOW_UMU_TAG`, `GOW_UMU_DATA`, `GOW_UMU_PREFIX`, `GOW_UMU_APPLICATIONS`
+- container
+    - `ui`: install exe
+    - `ur`: run exe
+
+Example workflow
+----------------
 ```
-[[apps]]
-start_audio_server = true
-start_virtual_compositor = true
-title = 'exe'
+./build.sh
 
-    [apps.runner]
-    base_create_json = '{ "HostConfig": { "IpcMode": "host", "SecurityOpt": ["seccomp=unconfined"], "CapAdd": ["MKNOD"], "DeviceRequests": [ { "Driver": "cdi", "DeviceIDs": ["nvidia.com/gpu=all"] } ] }, "Cmd": ["ur", "/path/to/exe"] }'
-    devices = []
-    env = [ 'XKB_DEFAULT_LAYOUT=fi' ]
-    image = 'ghcr.io/eetumos/gow-umu'
-    mounts = [ '/home/eetu/Games/umu:/home/retro/Games/umu:Z' ]
-    name = 'gow-umu'
-    ports = []
-    type = 'docker'
-
-[[apps]]
-start_audio_server = true
-start_virtual_compositor = true
-title = 'control'
-
-    [apps.runner]
-    base_create_json = '{ "HostConfig": { "IpcMode": "host", "SecurityOpt": ["seccomp=unconfined"], "CapAdd": ["MKNOD"], "DeviceRequests": [ { "Driver": "cdi", "DeviceIDs": ["nvidia.com/gpu=all"] } ] }, "Cmd": ["ur", "control"] }'
-    devices = []
-    env = [ 'XKB_DEFAULT_LAYOUT=fi' ]
-    image = 'ghcr.io/eetumos/gow-umu'
-    mounts = []
-    name = 'gow-umu-control'
-    ports = []
-    type = 'docker'
-
-[[apps]]
-start_audio_server = true
-start_virtual_compositor = true
-title = 'vkcube'
-
-    [apps.runner]
-    base_create_json = '{ "HostConfig": { "IpcMode": "host", "CapAdd": ["MKNOD"], "DeviceRequests": [ { "Driver": "cdi", "DeviceIDs": ["nvidia.com/gpu=all"] } ] }, "Cmd": ["vkcube", "--wsi", "wayland"] }'
-    devices = []
-    env = [ 'XKB_DEFAULT_LAYOUT=fi' ]
-    image = 'ghcr.io/eetumos/gow-umu'
-    mounts = []
-    name = 'gow-umu-vkcube'
-    ports = []
-    type = 'docker'
-
-[[apps]]
-start_audio_server = true
-start_virtual_compositor = true
-title = 'jstest-gtk'
-
-    [apps.runner]
-    base_create_json = '{ "HostConfig": { "IpcMode": "host", "CapAdd": ["MKNOD"], "DeviceRequests": [ { "Driver": "cdi", "DeviceIDs": ["nvidia.com/gpu=all"] } ] }, "Cmd": ["jstest-gtk"] }'
-    devices = []
-    env = [ 'XKB_DEFAULT_LAYOUT=fi' ]
-    image = 'ghcr.io/eetumos/gow-umu'
-    mounts = []
-    name = 'gow-umu-jstest-gtk'
-    ports = []
-    type = 'docker'
+./bin/uh ui Steam SteamSetup.exe  # -> /opt/umu/Steam
+./bin/uh ur Steam                 # -> ~/.local/share/gow-umu
+./bin/ud                          # -> /usr/local/share/applications/umu
+./bin/uw                          # -> stdout
 ```
