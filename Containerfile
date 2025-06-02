@@ -1,7 +1,7 @@
 FROM quay.io/fedora/fedora:42
 
 RUN dnf install -y glibc-langpack-en util-linux mangohud gamescope \
-                   icoextract ImageMagick                          \
+                   foot fzf icoextract ImageMagick jq              \
                    egl-utils vulkan-tools wev jstest-gtk
 RUN dnf install -y https://github.com/Open-Wine-Components/umu-launcher/releases/latest/download/umu-launcher-1.2.6.fc41.rpm
 
