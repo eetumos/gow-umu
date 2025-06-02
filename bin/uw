@@ -1,0 +1,54 @@
+#!/usr/bin/bash
+set -e
+shopt -s nullglob
+
+
+### environment ###
+GOW_UMU_DATA=${GOW_UMU_DATA:-/opt/umu}
+GOW_UMU_PREFIX=${GOW_UMU_PREFIX:-~/.local/share/gow-umu}
+XKB_DEFAULT_LAYOUT=${XKB_DEFAULT_LAYOUT:-$(localectl | rg -oP "X11 Layout: \K.*")}
+
+if [[ -c /dev/nvidia0 ]]
+then
+    gpu='"DeviceRequests": [ { "Driver": "cdi", "DeviceIDs": ["nvidia.com/gpu=all"] } ]'
+else
+    gpu='"Devices": [ { "PathOnHost": "/dev/dri", "PathInContainer": "/dev/dri", "CgroupPermissions": "rw" } ] }'
+fi
+
+
+### intent ###
+if [[ $# -eq 0 ]]
+then
+    requested=( $GOW_UMU_DATA/* )
+    requested=( "${requested[@]#$GOW_UMU_DATA/}" )
+else
+    requested=( "$@" )
+fi
+
+
+### output ###
+for name in "${requested[@]}"
+do
+    if ! [[ -d $GOW_UMU_DATA/$name ]]
+    then
+        echo "request doesn't exist: '$GOW_UMU_DATA/$name'" >&2
+        exit 1
+    fi
+
+    cat <<-EOF
+		[[apps]]
+		title = '$name'
+		    [apps.runner]
+		    base_create_json = '{ "HostConfig": { "IpcMode": "host", "SecurityOpt": ["seccomp=unconfined"], "CapAdd": ["MKNOD"], $gpu }, "Cmd": ["ur", "$name"] }'
+		    env = [ 'XKB_DEFAULT_LAYOUT=$XKB_DEFAULT_LAYOUT' ]
+		    image = 'ghcr.io/eetumos/gow-umu'
+		    mounts = [ '$GOW_UMU_DATA:/opt/umu', '$GOW_UMU_PREFIX:/home/retro/prefix' ]
+		    name = '$name'
+		    type = 'docker'
+	EOF
+
+    if [[ $name != ${requested[-1]} ]]
+    then
+        echo
+    fi
+done

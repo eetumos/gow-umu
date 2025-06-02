@@ -1,0 +1,103 @@
+#!/usr/bin/bash
+set -e
+
+
+### environment ###
+GOW_UMU_TAG=${GOW_UMU_TAG:-latest}
+GOW_UMU_DATA=${GOW_UMU_DATA:-/opt/umu}
+GOW_UMU_PREFIX=${GOW_UMU_PREFIX:-~/.local/share/gow-umu}
+
+if [[ $XDG_CURRENT_DESKTOP = GNOME ]]
+then
+    read GAMESCOPE_{WIDTH,HEIGHT,REFRESH} < <(gdctl show | rg -o "([0-9]+)x([0-9]+)@([0-9.]+)" -r '$1 $2 $3' | sort -nr | head -1)
+fi
+XKB_DEFAULT_LAYOUT=${XKB_DEFAULT_LAYOUT:-$(localectl | rg -oP "X11 Layout: \K.*")}
+
+
+### commands ###
+commands=()
+
+c() {
+    if command -v $1 >/dev/null
+    then
+        commands+=( "$@" )
+    fi
+}
+
+c gnome-session-inhibit
+c nvlimit-run
+
+
+### options ###
+options=()
+
+if [[ -c /dev/nvidia0 ]]
+then
+    options+=( --device=nvidia.com/gpu=all )
+else
+    options+=( --device=/dev/dri )
+fi
+
+e() {
+    if [[ -n ${!1} ]]
+    then
+        options+=( "--env=$1=${!1}" )
+    fi
+}
+
+e GAMESCOPE_HEIGHT
+e GAMESCOPE_REFRESH
+e GAMESCOPE_WIDTH
+
+e XKB_DEFAULT_LAYOUT
+e MANGOHUD_CONFIG
+e MESA_VK_DEVICE_SELECT
+
+if [[ -t 1 ]]
+then
+    options+=( --interactive --tty )
+fi
+
+args=()
+for arg
+do
+    if [[ -e $arg ]] && [[ $(realpath "$arg") == $HOME/* ]]
+    then
+        options+=( "--volume=$arg:/args/$arg" )
+        args+=( "/args/$arg" )
+    else
+        args+=( "$arg" )
+    fi
+done
+
+
+### container ###
+if ! [[ -d $GOW_UMU_DATA ]]
+then
+    pkexec mkdir -p "$GOW_UMU_DATA"
+fi
+mkdir -p "$GOW_UMU_PREFIX"
+
+maj() {
+    grep -oP "[0-9]+(?= $1)" /proc/devices
+}
+
+exec "${commands[@]}" pkexec podman run                                 \
+    --rm                                                                \
+    --pull=newer                                                        \
+    --ipc=host                                                          \
+    --security-opt=seccomp=unconfined                                   \
+    --security-opt=label=disable                                        \
+                                                                        \
+    --volume=$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY:/run/user/1000/wayland-0 \
+    --volume=$XDG_RUNTIME_DIR/pulse/native:/run/user/1000/pulse/native  \
+    --volume=/dev:/dev                                                  \
+    --device-cgroup-rule="c $(maj  input):* rw"                         \
+    --device-cgroup-rule="c $(maj hidraw):* rw"                         \
+    --group-add=input                                                   \
+                                                                        \
+    --volume="$GOW_UMU_DATA":/opt/umu                                   \
+    --volume="$GOW_UMU_PREFIX":/home/retro/prefix                       \
+    --volume="$HOME"/.cache:/home/retro/.cache                          \
+                                                                        \
+    "${options[@]}" ghcr.io/eetumos/gow-umu:$GOW_UMU_TAG "${args[@]}"
