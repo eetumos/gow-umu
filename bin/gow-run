@@ -1,0 +1,125 @@
+#!/usr/bin/bash
+set -e
+
+
+### environment ###
+GOW_IMAGE=${GOW_IMAGE:-ghcr.io/eetumos/gow-umu}
+GOW_HOME=${GOW_HOME:-$HOME}
+GOW_UMU_DATA=${GOW_UMU_DATA:-/opt/gow-umu}
+
+if [[ $XDG_CURRENT_DESKTOP = GNOME ]]
+then
+    read GAMESCOPE_{WIDTH,HEIGHT,REFRESH} < <(gdctl show | grep -o "[0-9]*x[0-9]*@[0-9.]*" | tr x@ " " | sort -nr | head -1)
+fi
+
+LANG=${LANG:-$(localectl | grep -oE "LANG=[^ ]+")}
+XKB_DEFAULT_LAYOUT=${XKB_DEFAULT_LAYOUT:-$(localectl | grep -oP "X11 Layout: \K.*")}
+
+
+### commands ###
+commands=()
+
+c() {
+    if command -v $1 >/dev/null
+    then
+        commands+=( "$@" )
+    fi
+}
+
+if [[ $XDG_CURRENT_DESKTOP = GNOME ]]
+then
+    c gnome-session-inhibit
+fi
+c nvlimit-run
+
+
+### options ###
+options=()
+
+if [[ $1 = --elevate ]]
+then
+    commands+=( pkexec )
+    shift
+
+    maj() {
+        grep -oP "[0-9]+(?= $1)" /proc/devices
+    }
+
+    options+=(
+        --device-cgroup-rule="c $(maj  input):* rw"
+        --device-cgroup-rule="c $(maj hidraw):* rw"
+        --group-add=$(getent group input | cut -d: -f3)
+    )
+else
+    options+=(
+        --cap-add=SYS_ADMIN
+        --group-add=keep-groups
+    )
+fi
+
+if [[ -c /dev/nvidia0 ]]
+then
+    options+=( --device=nvidia.com/gpu=all )
+else
+    options+=( --device=/dev/dri )
+fi
+
+e() {
+    if [[ -n ${!1} ]]
+    then
+        options+=( "--env=$1=${!1}" )
+    fi
+}
+
+e GAMESCOPE_HEIGHT
+e GAMESCOPE_REFRESH
+e GAMESCOPE_WIDTH
+
+e LANG
+e XKB_DEFAULT_LAYOUT
+
+if [[ -n $WAYLAND_DISPLAY ]]
+then
+    options+=(
+        --env=WAYLAND_DISPLAY=wayland-0
+        --volume=$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY:/tmp/wayland-0
+        --volume=$XDG_RUNTIME_DIR/pulse/native:/tmp/pulse/native
+    )
+fi
+
+if [[ -t 1 ]]
+then
+    options+=( --interactive --tty )
+fi
+
+if [[ $GOW_IMAGE = *gow-umu* ]]
+then
+    options+=(
+        --security-opt=seccomp=unconfined
+        --volume="$GOW_UMU_DATA":/opt/gow-umu
+    )
+
+    for i in $(seq 1 $#)
+    do
+        if [[ -e ${!i} ]] && [[ $(realpath "${!i}") = $HOME/* ]]
+        then
+            destination=/args/${!i##*/}
+            options+=( "--volume=${!i}:$destination" )
+            set -- "${@:1:i-1}" "$destination" "${@:i+1}"
+        fi
+    done
+fi
+
+
+### container ###
+exec "${commands[@]}" podman run     \
+    --rm                             \
+    --pull=newer                     \
+    --ipc=host                       \
+    --security-opt=label=disable     \
+                                     \
+    --env=XDG_RUNTIME_DIR=/tmp       \
+    --volume=/dev:/dev               \
+    --volume="$GOW_HOME":/home/retro \
+                                     \
+    "${options[@]}" $GOW_IMAGE "$@"
