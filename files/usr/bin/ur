@@ -1,0 +1,44 @@
+#!/usr/bin/bash
+set -e
+
+if [[ $1 = --wayland ]]
+then
+    shift
+    wayland=1
+else
+    wayland=
+fi
+
+if [[ -f /opt/gow-umu/$1/exe ]]
+then
+    exe=/opt/gow-umu/$1/exe
+
+    if [[ -f /opt/gow-umu/$1/env ]]
+    then
+        export $(< /opt/gow-umu/"$1"/env)
+    fi
+else
+    exe=$1
+fi
+shift
+
+if ! vulkaninfo 2>/dev/null | grep -q VK_KHR_maintenance5
+then
+    export PROTON_USE_WINED3D=1
+fi
+
+export WINEPREFIX=${WINEPREFIX:-~/.local/share/gow-umu}
+
+if [[ -n $wayland ]]
+then
+    export PROTON_ENABLE_WAYLAND=1 PROTON_ENABLE_HDR=1
+    exec mangohud umu-run "$exe" "$@"
+else
+    if [[ -z GAMESCOPE_WIDTH ]] || [[ -z GAMESCOPE_HEIGHT ]] || [[ -z GAMESCOPE_REFRESH ]]
+    then
+        echo "must set:" GAMESCOPE_{WIDTH,HEIGHT,REFRESH}
+        exit 1
+    fi
+
+    exec gamescope -f -w $GAMESCOPE_WIDTH -h $GAMESCOPE_HEIGHT -r $GAMESCOPE_REFRESH --force-grab-cursor --mangoapp -- umu-run "$exe" "$@"
+fi

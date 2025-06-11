@@ -1,0 +1,48 @@
+#!/usr/bin/bash
+set -e
+shopt -s nullglob
+
+if [[ -z $MESA_VK_DEVICE_SELECT ]] && vulkaninfo=$(MESA_VK_DEVICE_SELECT_FORCE_DEFAULT_DEVICE=1 vulkaninfo 2>/dev/null)
+then
+    vendor=$(grep -oP 'vendorID.*\K0x.*' <<< "$vulkaninfo")
+    device=$(grep -oP 'deviceID.*\K0x.*' <<< "$vulkaninfo")
+
+    export MESA_VK_DEVICE_SELECT=$vendor:$device!
+
+    for card in /sys/class/drm/card[0-9]/device
+    do
+        if [[ $(< $card/vendor) = $vendor ]] && [[ $(< $card/device) = $device ]]
+        then
+            busid=$(basename $(realpath $card))
+            export MANGOHUD_CONFIG=read_cfg,pci_dev=${busid//:/\\:}${MANGOHUD_CONFIG:+,}$MANGOHUD_CONFIG
+            break
+        fi
+    done
+fi
+
+if ! [[ -f ~/.config/MangoHud/MangoHud.conf ]] && ! [[ -f /etc/MangoHud.conf ]]
+then
+    export MANGOHUD_CONFIG=no_display${MANGOHUD_CONFIG:+,}$MANGOHUD_CONFIG
+fi
+
+if [[ $UID -eq 0 ]]
+then
+    if [[ -d $HOME ]]
+    then
+        home_uid=$(stat -c%u $HOME)
+        home_gid=$(stat -c%g $HOME)
+
+        if [[ $home_uid -ne 0 ]]
+        then
+            groupadd --gid=$home_gid retro
+            useradd  --uid=$home_uid --gid=retro --home-dir=$HOME --no-create-home retro
+
+            chown -R retro:retro "$XDG_RUNTIME_DIR"
+            exec setpriv --reuid=retro --regid=retro --keep-groups -- "$@"
+        fi
+    else
+        mkdir -p $HOME
+    fi
+fi
+
+exec "$@"

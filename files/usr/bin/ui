@@ -1,0 +1,97 @@
+#!/usr/bin/bash
+set -ex
+
+if ! [[ -t 0 ]]
+then
+    exec foot --log-level=error --hold $0 "$@"
+fi
+
+
+### environment ###
+if [[ $1 = --cover ]]
+then
+    shift
+    cover=1
+else
+    cover=
+fi
+
+if [[ $# -eq 0 ]]
+then
+    exit
+fi
+
+game=$1
+shift
+
+export WINEPREFIX=/opt/gow-umu/.install-prefix
+
+
+### install ###
+mkdir -p /opt/gow-umu/"$game"/files
+
+if [[ $# -gt 0 ]]
+then
+    ln -sfT /opt/gow-umu/"$game"/files $WINEPREFIX/dosdevices/u:
+    ur "$@"
+fi
+
+
+### file creation ###
+cd /opt/gow-umu/"$game"
+
+sel() {
+    input=$(< /dev/stdin)
+    title=$1
+    shift
+
+    if [[ -z $input ]]
+    then
+        return 1
+    fi
+
+    fzf -i -1 --query="$game" --header="$title" "$@" <<< "$input"
+}
+
+if ! [[ -e exe ]]
+then
+    if lnk=$(find $WINEPREFIX/drive_c/users -iname '*.lnk' | sel shortcut)
+    then
+        exe=$(grep -oEai "U:.*?exe" "$lnk" | sel exe --print0 | xargs -0r umu-run winepath -u || true)
+    fi
+
+    if [[ -z $exe ]]
+    then
+        exe=$(find files/ -iname '*.exe' | sel exe || true)
+    fi
+
+    if [[ -n $exe ]]
+    then
+        ln -sr "$exe" exe
+    else
+        echo "failed to locate exe"
+        exit 1
+    fi
+fi
+
+if ! [[ -f icon.png ]]
+then
+    icoextract exe icon.ico
+
+    mkdir -p icons
+    magick icon.ico icons/icon.png
+
+    mv "$(du -b icons/* | sort -nr | head -1 | cut -f2)" icon.png
+    rm -rf icon.ico icons
+fi
+
+if [[ -n $cover ]] && ! [[ -f cover.png ]]
+then
+    gamedb=https://raw.githubusercontent.com/LizardByte/GameDB/gh-pages
+
+    bucket=$(echo "${game,,}" | grep -Eo '^[a-z0-9][a-z0-9]?' || true)
+    id=$(curl -s $gamedb/buckets/${bucket:-@}.json | jq -r 'keys[] as $k | $k + " " + .[$k].name' | sel cover --accept-nth=1 --with-nth={2..})
+    slug=$(curl -s $gamedb/games/$id.json | jq -r '.cover.url | split("/")[-1] | split(".")[0]')
+
+    curl -so cover.png https://images.igdb.com/igdb/image/upload/t_cover_big_2x/$slug.png
+fi
