@@ -32,8 +32,10 @@ mkdir -p /opt/gow-umu/"$name"
 
 if [[ $# -gt 0 ]]
 then
-    umu-run reg add 'HKLM\Software\Microsoft\Windows\CurrentVersion' /v "ProgramFilesDir (x86)" /d 'Z:\opt\gow-umu\'"$name" /f
-    umu-run reg add 'HKLM\Software\Microsoft\Windows\CurrentVersion' /v  ProgramFilesDir        /d 'Z:\opt\gow-umu\'"$name" /f
+    umu-run reg add 'HKLM\Software\Microsoft\Windows\CurrentVersion' /v "ProgramFilesDir (x86)" /d 'U:\' /f
+    umu-run reg add 'HKLM\Software\Microsoft\Windows\CurrentVersion' /v  ProgramFilesDir        /d 'U:\' /f
+    ln -sfT /opt/gow-umu/"$name" $WINEPREFIX/dosdevices/u:
+
     ur "$@"
 fi
 
