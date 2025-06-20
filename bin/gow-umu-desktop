@@ -1,0 +1,98 @@
+#!/usr/bin/bash
+set -e
+shopt -s nullglob
+
+
+### environment ###
+GOW_UMU_DATA=${GOW_UMU_DATA:-/opt/gow-umu}
+GOW_UMU_APPLICATIONS=${GOW_UMU_APPLICATIONS:-/usr/local/share/applications/gow-umu}
+
+if ! command -v gow-run >/dev/null
+then
+    GOW_UMU_BIN=${GOW_UMU_BIN:-$(realpath "$(dirname "$0")")}
+fi
+
+
+### intent ###
+installed=( $GOW_UMU_DATA/* )
+installed=( "${installed[@]#$GOW_UMU_DATA/}" )
+
+if [[ $# -eq 0 ]]
+then
+    requested=()
+    for name in "${installed[@]}"
+    do
+        if ! [[ -f $GOW_UMU_APPLICATIONS/$name.desktop ]]
+        then
+            requested+=( "$name" )
+        fi
+    done
+else
+    requested=( "$@" )
+fi
+
+uninstalled=()
+for file in "$GOW_UMU_APPLICATIONS"/*.desktop
+do
+    for name in "${installed[@]}"
+    do
+        if [[ $GOW_UMU_APPLICATIONS/$name.desktop = $file ]]
+        then
+            continue 2
+        fi
+    done
+
+    echo "removing redundant entry: '$file'" >&2
+    uninstalled+=( "$file" )
+done
+
+
+### output ###
+tmp=$(mktemp -d)
+
+for name in "${requested[@]}"
+do
+    if ! [[ -d $GOW_UMU_DATA/$name ]]
+    then
+        echo "not installed: '$GOW_UMU_DATA/$name'" >&2
+        rm -r $tmp
+        exit 1
+    fi
+
+    cat <<-EOF >$tmp/"$name".desktop
+		[Desktop Entry]
+		Type=Application
+		Name=$name
+		Categories=Game
+		Exec=$GOW_UMU_BIN${GOW_UMU_BIN:+/}gow-run ur "$name"
+		Icon=$GOW_UMU_DATA/$name/icon.png
+	EOF
+
+    echo "wrote: '$GOW_UMU_APPLICATIONS/$name.desktop'" >&2
+done
+
+if [[ -w $GOW_UMU_APPLICATIONS ]]
+then
+    elevate=
+else
+    elevate=pkexec
+fi
+
+if [[ ${#requested[@]} -gt 0 ]] || [[ ${#uninstalled[@]} -gt 0 ]]
+then
+    $elevate bash -c "mkdir -p ${GOW_UMU_APPLICATIONS@Q}
+                      cd       ${GOW_UMU_APPLICATIONS@Q}
+    
+                      if [[ ${#requested[@]} -gt 0 ]]
+                      then
+                          cp ${tmp@Q}/* .
+                      fi
+
+
+                      if [[ ${#uninstalled[@]} -gt 0 ]]
+                      then
+                          rm ${uninstalled[*]@Q}
+                      fi"
+fi
+
+rm -r $tmp
