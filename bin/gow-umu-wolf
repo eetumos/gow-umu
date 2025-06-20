@@ -1,0 +1,62 @@
+#!/usr/bin/bash
+set -e
+shopt -s nullglob
+
+
+### environment ###
+GOW_HOME=${GOW_HOME:-$HOME}
+GOW_UMU_DATA=${GOW_UMU_DATA:-/opt/gow-umu}
+XKB_DEFAULT_LAYOUT=${XKB_DEFAULT_LAYOUT:-$(localectl | grep -oP "X11 Layout: \K.*")}
+
+
+### intent ###
+if [[ $# -eq 0 ]]
+then
+    requested=( $GOW_UMU_DATA/* )
+    requested=( "${requested[@]#$GOW_UMU_DATA/}" )
+else
+    requested=( "$@" )
+fi
+
+if [[ -c /dev/nvidia0 ]]
+then
+    gpu='"DeviceRequests": [ { "Driver": "cdi", "DeviceIDs": ["nvidia.com/gpu=all"] } ]'
+else
+    gpu='"Devices": [ { "PathOnHost": "/dev/dri", "PathInContainer": "/dev/dri", "CgroupPermissions": "rw" } ] }'
+fi
+
+
+if ! [[ -f $GOW_HOME/.config/MangoHud/MangoHud.conf ]] && [[ -f /etc/MangoHud.conf ]]
+then
+    mangohud=", '/etc/MangoHud.conf:/etc/MangoHud.conf'"
+else
+    mangohud=
+fi
+
+
+### output ###
+for name in "${requested[@]}"
+do
+    if ! [[ -d $GOW_UMU_DATA/$name ]]
+    then
+        echo "request doesn't exist: '$GOW_UMU_DATA/$name'" >&2
+        exit 1
+    fi
+
+    cat <<-EOF
+		[[apps]]
+		title = '$name'
+		    [apps.runner]
+		    base_create_json = '{ "HostConfig": { "IpcMode": "host", "SecurityOpt": ["seccomp=unconfined"], "CapAdd": ["MKNOD"], $gpu }, "Cmd": ["ur", "$name"] }'
+		    env = [ 'XKB_DEFAULT_LAYOUT=$XKB_DEFAULT_LAYOUT', 'HOME=/home/$(whoami)' ]
+		    image = 'ghcr.io/eetumos/gow-umu'
+		    mounts = [ '$GOW_UMU_DATA:/opt/gow-umu', '$GOW_HOME:/home/$(whoami)'$mangohud ]
+		    name = 'gow-umu-$(echo "${name,,}" | sed -e 's/[^[:alnum:]]\{1,\}/-/g' -e 's/[^[:alnum:]]$//')'
+		    type = 'docker'
+	EOF
+
+    if [[ $name != ${requested[-1]} ]]
+    then
+        echo
+    fi
+done
