@@ -35,5 +35,5 @@ else
         exit 1
     fi
 
-    exec gamescope -f -w $GAMESCOPE_WIDTH -h $GAMESCOPE_HEIGHT -r $GAMESCOPE_REFRESH --mangoapp -- umu-run "$exe" "$@"
+    exec gamescope -f -w $GAMESCOPE_WIDTH -h $GAMESCOPE_HEIGHT -r $GAMESCOPE_REFRESH --force-grab-cursor --mangoapp -- umu-run "$exe" "$@"
 fi
