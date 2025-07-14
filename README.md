@@ -8,7 +8,7 @@ Scripts
     - `gow-run`: run a gow container on the host desktop environment
     - `gow-umu-desktop`: generate desktop entries
     - `gow-umu-wolf`: generate Wolf config snippet
-    - configuration: `GOW_IMAGE`, `GOW_HOME`, `GOW_UMU_DATA`, `GOW_UMU_APPLICATIONS`
+    - configuration: `GOW_IMAGE`, `GOW_UMU_DATA`, `GOW_UMU_APPLICATIONS`
 - container
     - `ui`: install exe
     - `ur`: run exe

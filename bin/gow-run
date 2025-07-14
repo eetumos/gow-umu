@@ -4,7 +4,6 @@ set -e
 
 ### environment ###
 GOW_IMAGE=${GOW_IMAGE:-ghcr.io/eetumos/gow-umu}
-GOW_HOME=${GOW_HOME:-$HOME}
 GOW_UMU_DATA=${GOW_UMU_DATA:-/opt/gow-umu}
 
 if [[ $XDG_CURRENT_DESKTOP = GNOME ]]
@@ -75,6 +74,7 @@ e GAMESCOPE_HEIGHT
 e GAMESCOPE_REFRESH
 e GAMESCOPE_WIDTH
 
+e WINEPREFIX
 e LANG
 e XKB_DEFAULT_LAYOUT
 
@@ -99,7 +99,7 @@ then
         --volume="$GOW_UMU_DATA":/opt/gow-umu
     )
 
-    if ! [[ -f $GOW_HOME/.config/MangoHud/MangoHud.conf ]] && [[ -f /etc/MangoHud.conf ]]
+    if ! [[ -f $HOME/.config/MangoHud/MangoHud.conf ]] && [[ -f /etc/MangoHud.conf ]]
     then
         options+=( --volume=/etc/MangoHud.conf:/etc/MangoHud.conf )
     fi
@@ -120,13 +120,13 @@ fi
 
 
 ### container ###
-exec "${commands[@]}" podman run     \
-    --rm                             \
-    --ipc=host                       \
-    --security-opt=label=disable     \
-                                     \
-    --env=XDG_RUNTIME_DIR=/tmp       \
-    --volume=/dev:/dev               \
-    --volume="$GOW_HOME":/home/retro \
-                                     \
+exec "${commands[@]}" podman run \
+    --rm                         \
+    --ipc=host                   \
+    --security-opt=label=disable \
+                                 \
+    --env=XDG_RUNTIME_DIR=/tmp   \
+    --volume=/dev:/dev           \
+    --volume="$HOME:$HOME"       \
+                                 \
     "${options[@]}" $GOW_IMAGE "$@"
