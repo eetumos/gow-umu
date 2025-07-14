@@ -122,7 +122,6 @@ fi
 ### container ###
 exec "${commands[@]}" podman run     \
     --rm                             \
-    --pull=newer                     \
     --ipc=host                       \
     --security-opt=label=disable     \
                                      \
