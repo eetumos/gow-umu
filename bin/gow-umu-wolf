@@ -1,0 +1,83 @@
+#!/usr/bin/bash
+set -e
+shopt -s nullglob
+
+
+### environment ###
+GOW_UMU_DATA=${GOW_UMU_DATA:-/opt/gow-umu}
+XKB_DEFAULT_LAYOUT=${XKB_DEFAULT_LAYOUT:-$(localectl | grep -oP "X11 Layout: \K.*")}
+
+
+### intent ###
+installed=( $GOW_UMU_DATA/* )
+installed=( "${installed[@]#$GOW_UMU_DATA/}" )
+
+uninstalled=()
+for path in /etc/wolf/*/*
+do
+    game=${path##*/}
+
+    if [[ -L $path ]] && [[ $(readlink "$path") = gow-umu/ ]] && ! [[ -d $GOW_UMU_DATA/$game ]]
+    then
+        uninstalled+=( "$path" )
+    fi
+done
+
+if [[ -c /dev/nvidia0 ]]
+then
+    gpu='"DeviceRequests": [ { "Driver": "cdi", "DeviceIDs": ["nvidia.com/gpu=all"] } ]'
+else
+    gpu='"Devices": [ { "PathOnHost": "/dev/dri", "PathInContainer": "/dev/dri", "CgroupPermissions": "rw" } ] }'
+fi
+
+
+if ! [[ -f $HOME/.config/MangoHud/MangoHud.conf ]] && [[ -f /etc/MangoHud.conf ]]
+then
+    mangohud=", '/etc/MangoHud.conf:/etc/MangoHud.conf'"
+else
+    mangohud=
+fi
+
+
+### output ###
+for game in "${installed[@]}"
+do
+    cat <<-EOF
+		[[apps]]
+		title = '$game'
+		icon_png_path = "/opt/gow-umu/$game/cover.png"
+		    [apps.runner]
+		    base_create_json = '{ "HostConfig": { "IpcMode": "host", "SecurityOpt": ["seccomp=unconfined"], "CapAdd": ["MKNOD"], $gpu }, "Cmd": ["ur", "$game"] }'
+		    env = [ 'XKB_DEFAULT_LAYOUT=$XKB_DEFAULT_LAYOUT' ]
+		    image = 'ghcr.io/eetumos/gow-umu'
+		    mounts = [ '$GOW_UMU_DATA:/opt/gow-umu'$mangohud ]
+		    name = 'gow-umu-$(echo "${game,,}" | sed -e 's/[^[:alnum:]]\{1,\}/-/g' -e 's/[^[:alnum:]]$//')'
+		    type = 'docker'
+	EOF
+
+    if [[ $game != ${installed[-1]} ]]
+    then
+        echo
+    fi
+done
+
+for client in /etc/wolf/*/
+do
+    for game in "${installed[@]}"
+    do
+        if [[ -L $client/$game ]] || [[ -d $client/$game ]]
+        then
+            continue
+        fi
+
+        sudo ln -s gow-umu/ "$client/$game"
+    done
+
+    sudo mkdir -p "$client"/gow-umu
+    sudo chown -R 1000:1000 "$client"
+done
+
+if [[ ${#uninstalled[@]} -gt 0 ]]
+then
+    sudo rm "${uninstalled[@]}"
+fi

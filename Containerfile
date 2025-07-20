@@ -2,6 +2,7 @@ FROM quay.io/fedora/fedora:42
 
 RUN dnf install -y glibc-langpack-en util-linux mesa-{libGL,libEGL,vulkan-drivers}.i686 \
                    mangohud.{x86_64,i686} gamescope                                     \
+                   foot fzf icoextract ImageMagick jq                                   \
                    egl-utils vulkan-tools jstest-gtk
 
 RUN <<-EOF

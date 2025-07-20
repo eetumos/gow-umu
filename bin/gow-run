@@ -1,0 +1,152 @@
+#!/usr/bin/bash
+set -e
+
+
+### environment ###
+GOW_IMAGE=${GOW_IMAGE:-ghcr.io/eetumos/gow-umu}
+GOW_UMU_DATA=${GOW_UMU_DATA:-/opt/gow-umu}
+
+if [[ $GOW_IMAGE = *gow-umu* ]]
+then
+    GOW_HOME=${GOW_HOME:-/etc/wolf/"$(whoami)"/gow-umu}
+else
+    GOW_HOME=${GOW_HOME:-$HOME}
+fi
+
+LANG=${LANG:-$(localectl | grep -oE "LANG=[^ ]+")}
+XKB_DEFAULT_LAYOUT=${XKB_DEFAULT_LAYOUT:-$(localectl | grep -oP "X11 Layout: \K.*")}
+
+if [[ $XDG_CURRENT_DESKTOP = GNOME ]]
+then
+    read GNOME_{WIDTH,HEIGHT,REFRESH} \
+        < <(gdctl show | grep -o "[0-9]*x[0-9]*@[0-9.]*" | tr x@ " " | sort -nr | head -1)
+
+    GAMESCOPE_WIDTH=${GAMESCOPE_WIDTH:-$GNOME_WIDTH}
+    GAMESCOPE_HEIGHT=${GAMESCOPE_HEIGHT:-$GNOME_HEIGHT}
+    GAMESCOPE_REFRESH=${GAMESCOPE_REFRESH:-$GNOME_REFRESH}
+fi
+
+
+### commands ###
+commands=()
+
+c() {
+    if command -v $1 >/dev/null
+    then
+        commands+=( "$@" )
+    fi
+}
+
+if [[ $XDG_CURRENT_DESKTOP = GNOME ]]
+then
+    c gnome-session-inhibit
+fi
+
+
+### options ###
+options=()
+
+if [[ $1 = --system ]]
+then
+    commands+=( pkexec )
+    shift
+
+    maj() {
+        grep -oP "[0-9]+(?= $1)" /proc/devices
+    }
+
+    options+=(
+        --device-cgroup-rule="c $(maj  input):* rw"
+        --device-cgroup-rule="c $(maj hidraw):* rw"
+        --group-add=$(getent group input | cut -d: -f3)
+    )
+else
+    options+=(
+        --cap-add=SYS_ADMIN
+        --group-add=keep-groups
+    )
+fi
+
+if [[ -c /dev/nvidia0 ]]
+then
+    options+=( --device=nvidia.com/gpu=all )
+else
+    options+=( --device=/dev/dri )
+fi
+
+e() {
+    if [[ -n ${!1} ]]
+    then
+        options+=( "--env=$1=${!1}" )
+    fi
+}
+
+e GAMESCOPE_HEIGHT
+e GAMESCOPE_REFRESH
+e GAMESCOPE_WIDTH
+
+e LANG
+e XKB_DEFAULT_LAYOUT
+
+if [[ -n $WAYLAND_DISPLAY ]]
+then
+    options+=(
+        --env=XDG_RUNTIME_DIR=/tmp
+        --env=WAYLAND_DISPLAY=wayland-0
+        --volume=$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY:/tmp/wayland-0
+        --volume=$XDG_RUNTIME_DIR/pulse/native:/tmp/pulse/native
+    )
+fi
+
+if [[ -t 1 ]]
+then
+    options+=( --interactive --tty )
+fi
+
+if [[ $GOW_IMAGE = *gow-umu* ]]
+then
+    options+=(
+        --security-opt=seccomp=unconfined
+        --volume="$GOW_UMU_DATA":/opt/gow-umu
+    )
+
+    if [[ -f $HOME/.config/MangoHud/MangoHud.conf ]]
+    then
+        options+=( --volume=$HOME/.config/MangoHud/MangoHud.conf:/home/retro/.config/MangoHud/MangoHud.conf )
+    elif [[ -f /etc/MangoHud.conf ]]
+    then
+        options+=( --volume=/etc/MangoHud.conf:/home/retro/.config/MangoHud/MangoHud.conf )
+    fi
+
+    if [[ -n $WINEPREFIX ]]
+    then
+        options+=( "--volume=$WINEPREFIX:/home/retro/.local/share/gow-umu" )
+    fi
+
+    for i in $(seq 1 $#)
+    do
+        if [[ ${!i} = *\|* ]] && [[ -e ${!i/|//} ]]
+        then
+            src=$(realpath -m -- "${!i%%|*}")
+            dest=/args/${src##*/}
+
+            options+=( "--volume=$src:$dest" )
+            set -- "${@:1:i-1}" "$dest/${!i#*|}" "${@:i+1}"
+        fi
+    done
+fi
+
+
+### container ###
+mkdir -p "$GOW_HOME"
+
+exec "${commands[@]}" podman run     \
+    --rm                             \
+    --ipc=host                       \
+    --security-opt=label=disable     \
+                                     \
+    --env=HOME=/home/retro           \
+    --volume="$GOW_HOME":/home/retro \
+    --volume=/dev:/dev               \
+                                     \
+    "${options[@]}" $GOW_IMAGE "$@"
