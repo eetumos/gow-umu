@@ -1,0 +1,90 @@
+#!/usr/bin/bash
+set -e
+shopt -s nullglob
+
+
+### environment ###
+GOW_UMU_DATA=${GOW_UMU_DATA:-/opt/gow-umu}
+GOW_UMU_APPLICATIONS=${GOW_UMU_APPLICATIONS:-/usr/local/share/applications/gow-umu}
+
+if ! command -v gow-run >/dev/null
+then
+    GOW_UMU_BIN=${GOW_UMU_BIN:-$(realpath "$(dirname "$0")")}
+fi
+
+
+### intent ###
+installed=( $GOW_UMU_DATA/* )
+installed=( "${installed[@]#$GOW_UMU_DATA/}" )
+
+requested=()
+for game in "${installed[@]}"
+do
+    if ! [[ -f $GOW_UMU_APPLICATIONS/$game.desktop ]]
+    then
+        requested+=( "$game" )
+    fi
+done
+
+uninstalled=()
+for file in "$GOW_UMU_APPLICATIONS"/*.desktop
+do
+    game=${file##*/} game=${game%.desktop}
+
+    if ! [[ -d $GOW_UMU_DATA/$game ]]
+    then
+        echo "removing redundant entry: '$file'" >&2
+        uninstalled+=( "$file" )
+    fi
+done
+
+
+### output ###
+tmp=$(mktemp -d)
+
+for game in "${requested[@]}"
+do
+    if ! [[ -d $GOW_UMU_DATA/$game ]]
+    then
+        echo "not installed: '$GOW_UMU_DATA/$game'" >&2
+        rm -r $tmp
+        exit 1
+    fi
+
+    cat <<-EOF >$tmp/"$game".desktop
+		[Desktop Entry]
+		Type=Application
+		Name=$game
+		Categories=Game
+		Exec=$GOW_UMU_BIN${GOW_UMU_BIN:+/}gow-run ur "$game"
+		Icon=$GOW_UMU_DATA/$game/icon.png
+	EOF
+
+    echo "wrote: '$GOW_UMU_APPLICATIONS/$game.desktop'" >&2
+done
+
+if [[ -w $GOW_UMU_APPLICATIONS ]]
+then
+    elevate=
+else
+    elevate=pkexec
+fi
+
+if [[ ${#requested[@]} -gt 0 ]] || [[ ${#uninstalled[@]} -gt 0 ]]
+then
+    $elevate bash -c "mkdir -p ${GOW_UMU_APPLICATIONS@Q}
+                      cd       ${GOW_UMU_APPLICATIONS@Q}
+    
+                      if [[ ${#requested[@]} -gt 0 ]]
+                      then
+                          cp ${tmp@Q}/* .
+                      fi
+
+
+                      if [[ ${#uninstalled[@]} -gt 0 ]]
+                      then
+                          rm ${uninstalled[*]@Q}
+                      fi"
+fi
+
+rm -r $tmp
