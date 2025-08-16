@@ -32,7 +32,7 @@ mkdir -p /opt/gow-umu/"$game"/files
 
 if [[ $# -gt 0 ]]
 then
-    ln -sfT /opt/gow-umu/"$game"/data $WINEPREFIX/dosdevices/u:
+    ln -sfT /opt/gow-umu/"$game"/files $WINEPREFIX/dosdevices/u:
     ur "$@"
 fi
 
